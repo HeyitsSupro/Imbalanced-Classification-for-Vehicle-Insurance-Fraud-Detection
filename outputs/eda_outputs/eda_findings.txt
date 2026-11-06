@@ -1,0 +1,24 @@
+EDA FINDINGS
+============
+
+- Dataset: 15,420 claims with 32 model features (6 numeric, 26 categorical, including the derived AgeWasZero flag); PolicyNumber is an identifier and is excluded.
+
+- Claim years covered: 1994, 1995, 1996.
+
+- Class imbalance: 14,497 legitimate (94.01%) vs 923 fraudulent (5.99%) claims, a ratio of 15.7:1. Always predicting 'legitimate' would be 94.0% accurate while catching no fraud, so accuracy is not used; the no-skill PR-AUC is 0.060.
+
+- Data quality: Age equal to 0: 320 claims; MonthClaimed equal to '0': 1 claim; DayOfWeekClaimed equal to '0': 1 claim - these placeholder values were set to missing (Age=0 is also kept as the AgeWasZero flag). Exact duplicate rows: 0.
+
+- Missing values after cleaning: DayOfWeekClaimed 1 (0.01%), MonthClaimed 1 (0.01%), Age 320 (2.08%). They are imputed inside each training fold (median for numeric, most frequent level for categorical), so validation and test rows never inform the imputation.
+
+- Strongest categorical associations with fraud (bias-corrected Cramer's V): PolicyType V=0.167, chi-square not reported (sparse cells); BasePolicy V=0.161, BH q=5.0e-87; VehicleCategory V=0.137, BH q=5.0e-63; Fault V=0.131, BH q=7.1e-59; AddressChange_Claim V=0.081, chi-square not reported (sparse cells). All associations are weak to moderate (V < 0.2), so no single feature separates fraud from legitimate claims.
+
+- Numeric features are only weakly related to fraud (Spearman rho): Deductible +0.041 (q=2.25e-06); AgeWasZero +0.023 (q=0.013); Age -0.022 (q=0.013); WeekOfMonth -0.012 (q=0.207); DriverRating +0.007 (q=0.441); WeekOfMonthClaimed -0.005 (q=0.514).
+
+- Fraud-rate comparisons (highest vs lowest level, overall rate 6.0%): Fault: Policy Holder 7.9% (n=11,230) vs Third Party 0.9% (n=4,190); PolicyType: Sport - Collision 13.8% (n=348) vs Sedan - Liability 0.7% (n=4,987); VehicleCategory: Utility 11.3% (n=391) vs Sport 1.6% (n=5,358); VehiclePrice: less than 20000 9.4% (n=1,096) vs 60000 to 69000 4.6% (n=87); AccidentArea: Rural 8.3% (n=1,598) vs Urban 5.7% (n=13,822); PastNumberOfClaims: none 7.8% (n=4,352) vs more than 4 3.4% (n=2,010).
+
+- Age: fraudulent claimants are slightly younger (median 37 vs 39, Mann-Whitney p=0.00651); fraud rate by age band ranges from 4.9% to 7.1%, a small effect.
+
+- Redundant features (Cramer's V >= 0.7): PolicyType-VehicleCategory 1.00; PolicyType-BasePolicy 1.00; AgeOfPolicyHolder-AgeWasZero 1.00; AgeOfVehicle-AgeWasZero 0.92; AgeOfPolicyHolder-Age 0.90; MonthClaimed-Month 0.75. PolicyType is effectively VehicleCategory combined with BasePolicy. All are kept: tree models are unaffected, but individual Logistic Regression coefficients for these features should not be interpreted.
+
+- These associations are descriptive and do not imply causation; the models use all features jointly.

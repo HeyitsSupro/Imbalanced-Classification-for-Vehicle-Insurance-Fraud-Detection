@@ -1,0 +1,65 @@
+VEHICLE INSURANCE FRAUD DETECTION - IMBALANCED CLASSIFICATION REPORT
+====================================================================
+
+1. Exploratory data analysis
+   - Dataset: 15,420 claims with 32 model features (6 numeric, 26 categorical, including the derived AgeWasZero flag); PolicyNumber is an identifier and is excluded.
+   - Claim years covered: 1994, 1995, 1996.
+   - Class imbalance: 14,497 legitimate (94.01%) vs 923 fraudulent (5.99%) claims, a ratio of 15.7:1. Always predicting 'legitimate' would be 94.0% accurate while catching no fraud, so accuracy is not used; the no-skill PR-AUC is 0.060.
+   - Data quality: Age equal to 0: 320 claims; MonthClaimed equal to '0': 1 claim; DayOfWeekClaimed equal to '0': 1 claim - these placeholder values were set to missing (Age=0 is also kept as the AgeWasZero flag). Exact duplicate rows: 0.
+   - Missing values after cleaning: DayOfWeekClaimed 1 (0.01%), MonthClaimed 1 (0.01%), Age 320 (2.08%). They are imputed inside each training fold (median for numeric, most frequent level for categorical), so validation and test rows never inform the imputation.
+   - Strongest categorical associations with fraud (bias-corrected Cramer's V): PolicyType V=0.167, chi-square not reported (sparse cells); BasePolicy V=0.161, BH q=5.0e-87; VehicleCategory V=0.137, BH q=5.0e-63; Fault V=0.131, BH q=7.1e-59; AddressChange_Claim V=0.081, chi-square not reported (sparse cells). All associations are weak to moderate (V < 0.2), so no single feature separates fraud from legitimate claims.
+   - Numeric features are only weakly related to fraud (Spearman rho): Deductible +0.041 (q=2.25e-06); AgeWasZero +0.023 (q=0.013); Age -0.022 (q=0.013); WeekOfMonth -0.012 (q=0.207); DriverRating +0.007 (q=0.441); WeekOfMonthClaimed -0.005 (q=0.514).
+   - Fraud-rate comparisons (highest vs lowest level, overall rate 6.0%): Fault: Policy Holder 7.9% (n=11,230) vs Third Party 0.9% (n=4,190); PolicyType: Sport - Collision 13.8% (n=348) vs Sedan - Liability 0.7% (n=4,987); VehicleCategory: Utility 11.3% (n=391) vs Sport 1.6% (n=5,358); VehiclePrice: less than 20000 9.4% (n=1,096) vs 60000 to 69000 4.6% (n=87); AccidentArea: Rural 8.3% (n=1,598) vs Urban 5.7% (n=13,822); PastNumberOfClaims: none 7.8% (n=4,352) vs more than 4 3.4% (n=2,010).
+   - Age: fraudulent claimants are slightly younger (median 37 vs 39, Mann-Whitney p=0.00651); fraud rate by age band ranges from 4.9% to 7.1%, a small effect.
+   - Redundant features (Cramer's V >= 0.7): PolicyType-VehicleCategory 1.00; PolicyType-BasePolicy 1.00; AgeOfPolicyHolder-AgeWasZero 1.00; AgeOfVehicle-AgeWasZero 0.92; AgeOfPolicyHolder-Age 0.90; MonthClaimed-Month 0.75. PolicyType is effectively VehicleCategory combined with BasePolicy. All are kept: tree models are unaffected, but individual Logistic Regression coefficients for these features should not be interpreted.
+   - These associations are descriptive and do not imply causation; the models use all features jointly.
+
+2. Evaluation design
+   - Stratified 80/20 split: development set 12,336 claims (5.98% fraud), held-out test set 3,084 claims (6.00% fraud).
+   - Candidates: Logistic Regression, Decision Tree and Random Forest, each with no resampling (baseline), class weighting (class_weight='balanced'), random oversampling, SMOTE and random undersampling: 15 candidates in total.
+   - SMOTE is implemented using SMOTENC because the data mix numeric and categorical features. Plain SMOTE interpolates every feature numerically, which would create invalid in-between category codes; SMOTENC interpolates the numeric features and assigns each categorical feature the most frequent value among the minority-class nearest neighbours.
+   - Model comparison uses 5-fold stratified cross-validation repeated 3 times on the development set. Imputation, scaling, encoding and all resampling are fitted inside each training fold only, so no synthetic or duplicated rows reach a validation fold (no data leakage).
+   - Selection criterion: highest mean CV fraud-class F1 at threshold 0.50, PR-AUC as tie-break. The false-positive rate is reported for every candidate.
+   - The test set is reserved for post-selection evaluation. Once CV selection was complete, all 15 candidates were refit on the full development set and scored on the test set for reporting. Test results were not used to choose any model or strategy.
+
+3. Effect of imbalance handling (CV, paired change vs. same model without resampling; folds improved out of 15)
+   Logistic Regression  Class weighting        recall +0.824 (15/15), F1 +0.215 (15/15), FPR +0.340, PR-AUC -0.012 (1/15), ROC-AUC +0.001 (8/15)
+   Logistic Regression  Random oversampling    recall +0.813 (15/15), F1 +0.214 (15/15), FPR +0.336, PR-AUC -0.013 (0/15), ROC-AUC -0.001 (6/15)
+   Logistic Regression  SMOTE (SMOTENC)        recall +0.503 (15/15), F1 +0.202 (15/15), FPR +0.200, PR-AUC -0.032 (0/15), ROC-AUC -0.044 (0/15)
+   Logistic Regression  Random undersampling   recall +0.812 (15/15), F1 +0.211 (15/15), FPR +0.343, PR-AUC -0.016 (3/15), ROC-AUC -0.009 (4/15)
+   Decision Tree        Class weighting        recall +0.863 (15/15), F1 +0.169 (15/15), FPR +0.390, PR-AUC -0.012 (1/15), ROC-AUC -0.012 (1/15)
+   Decision Tree        Random oversampling    recall +0.855 (15/15), F1 +0.173 (15/15), FPR +0.378, PR-AUC +0.000 (8/15), ROC-AUC -0.011 (5/15)
+   Decision Tree        SMOTE (SMOTENC)        recall +0.635 (15/15), F1 +0.166 (15/15), FPR +0.278, PR-AUC -0.034 (0/15), ROC-AUC -0.029 (0/15)
+   Decision Tree        Random undersampling   recall +0.815 (15/15), F1 +0.171 (15/15), FPR +0.363, PR-AUC -0.038 (0/15), ROC-AUC -0.022 (1/15)
+   Random Forest        Class weighting        recall +0.621 (15/15), F1 +0.279 (15/15), FPR +0.180, PR-AUC -0.008 (5/15), ROC-AUC +0.003 (10/15)
+   Random Forest        Random oversampling    recall +0.196 (15/15), F1 +0.233 (15/15), FPR +0.031, PR-AUC -0.002 (8/15), ROC-AUC +0.005 (12/15)
+   Random Forest        SMOTE (SMOTENC)        recall +0.293 (15/15), F1 +0.215 (15/15), FPR +0.091, PR-AUC -0.070 (0/15), ROC-AUC -0.033 (0/15)
+   Random Forest        Random undersampling   recall +0.928 (15/15), F1 +0.224 (15/15), FPR +0.404, PR-AUC -0.052 (0/15), ROC-AUC -0.023 (0/15)
+
+4. Best imbalance strategy per model (CV mean at threshold 0.50)
+   Logistic Regression  Class weighting        F1 0.232, recall 0.833, precision 0.134, FPR 0.341, PR-AUC 0.162, ROC-AUC 0.805
+   Decision Tree        Random oversampling    F1 0.225, recall 0.883, precision 0.129, FPR 0.381, PR-AUC 0.190, ROC-AUC 0.797
+   Random Forest        Class weighting        F1 0.279, recall 0.621, precision 0.180, FPR 0.180, PR-AUC 0.238, ROC-AUC 0.833
+
+5. SMOTE (via SMOTENC) vs. no resampling (CV mean at threshold 0.50)
+   Logistic Regression  recall 0.009 -> 0.511, F1 0.017 -> 0.219, FPR 0.001 -> 0.201, PR-AUC 0.175 -> 0.143
+   Decision Tree        recall 0.028 -> 0.663, F1 0.052 -> 0.218, FPR 0.003 -> 0.281, PR-AUC 0.190 -> 0.156
+   Random Forest        recall 0.000 -> 0.293, F1 0.000 -> 0.215, FPR 0.000 -> 0.091, PR-AUC 0.245 -> 0.176
+
+6. Selected model: Random Forest + Class weighting
+   CV F1 0.279 ± 0.018, recall 0.621, precision 0.180, FPR 0.180.
+   Held-out test (threshold 0.50), with 95% stratified bootstrap CI (1,000 resamples) and change vs. Random Forest without resampling:
+     Precision            0.184 [0.162, 0.206]   baseline 0.000   change +0.184 [+0.162, +0.206]
+     Recall               0.595 [0.519, 0.665]   baseline 0.000   change +0.595 [+0.519, +0.665]
+     F1-score             0.281 [0.249, 0.313]   baseline 0.000   change +0.281 [+0.249, +0.313]
+     PR-AUC               0.193 [0.166, 0.237]   baseline 0.215   change -0.022 [-0.049, +0.003]
+     ROC-AUC              0.829 [0.803, 0.851]   baseline 0.824   change +0.006 [-0.004, +0.015]
+     False-positive rate  0.168 [0.155, 0.180]   baseline 0.000   change +0.168 [+0.155, +0.180]
+     Specificity          0.832 [0.820, 0.845]   baseline 1.000   change -0.168 [-0.180, -0.155]
+   Test confusion matrix: TP 110, FN 75, FP 487, TN 2412.
+
+7. Interpretation
+   - Classification at the 0.50 threshold improves: Recall +0.595 (95% CI +0.519 to +0.665): a clear increase (interval excludes zero); F1-score +0.281 (95% CI +0.249 to +0.313): a clear increase (interval excludes zero).
+   - Ranking ability does not clearly improve: PR-AUC -0.022 (95% CI -0.049 to +0.003): no clear change (interval includes zero); ROC-AUC +0.006 (95% CI -0.004 to +0.015): no clear change (interval includes zero).
+   - Across CV, 11 of 12 model/strategy pairs have a lower mean PR-AUC than the same model without resampling.
+   - Associations from the EDA are descriptive and do not imply causation.
